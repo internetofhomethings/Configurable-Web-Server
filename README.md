@@ -13,14 +13,14 @@ Setup:
 <hr>
 char init_ssid[32] = "YOURWIFISSID";            
 char init_pass[32] = "YOURWIFIPASSWORD";            
-//Your assigned ESP8266 static IP
-const char* init_ip0 = "192";
-const char* init_ip1 = "168";
-const char* init_ip2 = "0";
-const char* init_ip3 = "132";
-.
-.
-//Your assigned WIFI LAN router IP
+//Your assigned ESP8266 static IP            
+const char* init_ip0 = "192";            
+const char* init_ip1 = "168";            
+const char* init_ip2 = "0";            
+const char* init_ip3 = "132";            
+.            
+.            
+//Your assigned WIFI LAN router IP            
 const char* init_gw0 = "192";                      
 const char* init_gw1 = "168";
 const char* init_gw2 = "0";
