@@ -25,11 +25,11 @@ const char* init_gw1 = "168";
 const char* init_gw2 = "0";            
 const char* init_gw3 = "1";            
 .            
-//Web Server port
-const char* init_port = "9701";
-//Your MQTT broker
-const char* init_bk = "test.mosquitto.org";
-<hr>
+//Web Server port            
+const char* init_port = "9701";            
+//Your MQTT broker            
+const char* init_bk = "test.mosquitto.org";            
+<hr>            
 
 5. Server Setting
 
