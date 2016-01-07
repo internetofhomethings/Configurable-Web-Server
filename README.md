@@ -19,14 +19,12 @@ const char* init_ip1 = "168";
 const char* init_ip2 = "0";            
 const char* init_ip3 = "132";            
 .            
-.            
 //Your assigned WIFI LAN router IP            
 const char* init_gw0 = "192";                      
-const char* init_gw1 = "168";
-const char* init_gw2 = "0";
-const char* init_gw3 = "1";
-.
-.
+const char* init_gw1 = "168";            
+const char* init_gw2 = "0";            
+const char* init_gw3 = "1";            
+.            
 //Web Server port
 const char* init_port = "9701";
 //Your MQTT broker
