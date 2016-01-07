@@ -1,7 +1,12 @@
 <h2><strong>ESP8266 http Web and MQTT Server</strong></h2>
 
-This project provides a Web Server Framework supporting http and MQTT requests 
-to access both ESP8266 and Arduino resources.
+This project provides a Web Server Framework supporting http and MQTT requests.
+
+Features Include:
+
+1. ESP8266 Analog Reads (8 with multiplexer)
+2. Arduino Serial Port Interface to access Analog and Digital resources
+3. Webpage Configuration Control stored in ESP8266 EEPROM
 
 <strong><h3>Setup:</h3></strong>
 
