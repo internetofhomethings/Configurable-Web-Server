@@ -11,21 +11,25 @@ Setup:
 4. Change the following in the http_mqtt_server sketch to match your network settings:
 <hr>
 char init_ssid[32] = "YOURWIFISSID";            
-char init_pass[32] = "YOURWIFIPASSWORD";     
-const char* init_ip0 = "192";                      //Your assigned ESP8266 static IP
+char init_pass[32] = "YOURWIFIPASSWORD";
+//Your assigned ESP8266 static IP
+const char* init_ip0 = "192";                      
 const char* init_ip1 = "168";
 const char* init_ip2 = "0";
 const char* init_ip3 = "132";
 .
 .
-const char* init_gw0 = "192";                      //Your assigned WIFI LAN router IP
+//Your assigned WIFI LAN router IP
+const char* init_gw0 = "192";                      
 const char* init_gw1 = "168";
 const char* init_gw2 = "0";
 const char* init_gw3 = "1";
 .
 .
-const char* init_port = "9701";                    //Web Server port
-const char* init_bk = "test.mosquitto.org";        //Your MQTT broker
+//Web Server port
+const char* init_port = "9701";
+//Your MQTT broker
+const char* init_bk = "test.mosquitto.org";
 <hr>
 
 5. Server Setting
