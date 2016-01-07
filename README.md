@@ -128,7 +128,7 @@ Once you have entered any desired changes, click on the SAVE button to write the
 EEPROM, They will used the next time the ESP8266 is started. Clicking on the RESET ESP8266 button will
 restart it.
 
-Configuration in AP mode:
+<strong>Configuration in AP mode:</strong>
 
 If the ESP8266 is moved to a WIFI with a different ssid/password, it will not be able to connect using
 it's current settings. Upon startup, the ESP attempts to connect to the Wifi that is stored in EEPROM. This
@@ -141,6 +141,8 @@ http://192.168.4.1:9701/config
 
 This will open the configuration panel. The AP IP "192.168.4.1" can also be modified through the configuration
 panel..
+
+<strong>Final note:</strong>
 
 Note that the Serial Interface is set by default to a very slow 1200 baud rate. This is necessary for
 reliable operation when intefacing  with Arduino using the Arduino Software Serial (Digital pins 10 & 11)
