@@ -43,7 +43,7 @@ to:
 
 define MQTT_SVR_ENABLE 0
 
-<strong>Operation:</strong>
+<strong><h3>Operation:</h3></strong>
 
 The ESP8266 performs as a server, receiving URL commands and either:
 
