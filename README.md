@@ -3,7 +3,7 @@
 This project provides a Web Server Framework supporting http and MQTT requests 
 to access both ESP8266 and Arduino resources.
 
-Setup:
+<strong><h3>Setup:</h3></strong>
 
 1. Copy the http_mqtt_server folder to your Arduino sketch folder.
 2. Copy the UtilityFunctions folder to your Arduino libraries folder.
@@ -31,7 +31,7 @@ const char* init_port = "9701";
 const char* init_bk = "test.mosquitto.org";            
 <hr>            
 
-<strong>Server Setting</strong>
+<strong><h3>Server Setting</h3></strong>
 
 If you wish to disable the MQTT server, change the following in sketch.h
 
@@ -58,7 +58,7 @@ This sketch uses the Arduino software serial interface using digital pins 10 and
 tested using an Arduino nano. Using an Arduino with more serial ports, such as a MEGA can be used
 and utilize the built-in hardware serial port. This would require some adjustment to the sketch.
 
-<strong><h3>--- Web Server test: ---</h3></strong>
+<strong><h3>Web Server test:</h3></strong>
 
 With both the Arduino and ESP8266 connected and running,
 
@@ -94,12 +94,12 @@ The returned value in the web browser should be similar to (units returned are v
 
 Analog Channel 04 is 2.48
 
-Expansion:
+<strong><h3>Expansion:</h3></strong>
 
 Simply add the input/output configuration in your Arduino sketch setup() function to enable
 additional resource control such as 1-wire or i2c connected devices.
 
-<strong><h3>--- Web configuration test: ---</h3></strong>
+<strong><h3>Web configuration test:</h3></strong>
 
 This sketch is provided with the operation of loading the ESP8266 internal EEPROM with the default
 values hard-coded in the sketch.
