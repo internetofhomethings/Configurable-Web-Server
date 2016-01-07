@@ -31,7 +31,7 @@ const char* init_port = "9701";
 const char* init_bk = "test.mosquitto.org";            
 <hr>            
 
-5. Server Setting
+<strong>Server Setting</strong>
 
 If you wish to disable the MQTT server, change the following in sketch.h
 
@@ -43,7 +43,7 @@ to:
 
 define MQTT_SVR_ENABLE 0
 
-Operation:
+<strong>Operation:</strong>
 
 The ESP8266 performs as a server, receiving URL commands and either:
 
@@ -58,7 +58,7 @@ This sketch uses the Arduino software serial interface using digital pins 10 and
 tested using an Arduino nano. Using an Arduino with more serial ports, such as a MEGA can be used
 and utilize the built-in hardware serial port. This would require some adjustment to the sketch.
 
-<strong>--- Web Server test: ---</strong>
+<strong><h3>--- Web Server test: ---</h3></strong>
 
 With both the Arduino and ESP8266 connected and running,
 
@@ -99,7 +99,7 @@ Expansion:
 Simply add the input/output configuration in your Arduino sketch setup() function to enable
 additional resource control such as 1-wire or i2c connected devices.
 
-<strong>--- Web configuration test: ---</strong>
+<strong><h3>--- Web configuration test: ---</h3></strong>
 
 This sketch is provided with the operation of loading the ESP8266 internal EEPROM with the default
 values hard-coded in the sketch.
