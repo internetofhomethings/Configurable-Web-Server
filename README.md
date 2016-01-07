@@ -12,7 +12,7 @@ Setup:
 
 <hr>
 char init_ssid[32] = "YOURWIFISSID";            
-char init_pass[32] = "YOURWIFIPASSWORD";
+char init_pass[32] = "YOURWIFIPASSWORD";            
 //Your assigned ESP8266 static IP
 const char* init_ip0 = "192";
 const char* init_ip1 = "168";
