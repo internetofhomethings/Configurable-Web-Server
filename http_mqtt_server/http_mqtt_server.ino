@@ -910,7 +910,6 @@ Content-Length: 0\r\nServer: lwIP/1.4.0\r\n\n");
 void SdkWebServer_senddata_html(void *arg, bool responseOK, char *psend)
 {
     uint16 length = 0;
-    int i;
     char *pbuf = NULL;
     char httphead[256];
     struct espconn *ptrespconn = ( espconn *)arg;
@@ -918,12 +917,13 @@ void SdkWebServer_senddata_html(void *arg, bool responseOK, char *psend)
 
     if (responseOK) {
         os_sprintf(httphead,
-                   "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nAccess-Control-Allow-Origin: *\r\n",
+                   "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nServer: lwIP/1.4.0\r\nAccess-Control-Allow-Origin: *\r\n",
+                   //"HTTP/1.0 200 OK\r\nContent-Length: %d\r\nAccess-Control-Allow-Origin: *\r\n",
                    psend ? os_strlen(psend) : 0);
 
         if (psend) {
             os_sprintf(httphead + os_strlen(httphead),
-                       "Content-type: text/html\r\nPragma: no-cache\r\n\r\n");
+                       "Content-type: text/html\r\nExpires: Fri, 15 Apr 2016 14:00:00 GMT\r\nPragma: no-cache\r\n\r\n");
                        //"Content-type: application/json\r\nExpires: Fri, 10 Apr 2015 14:00:00 GMT\r\nPragma: no-cache\r\n\r\n");
             length = os_strlen(httphead) + os_strlen(psend);
             pbuf = (char *)os_zalloc(length + 1);
@@ -938,13 +938,8 @@ void SdkWebServer_senddata_html(void *arg, bool responseOK, char *psend)
 Content-Length: 0\r\nServer: lwIP/1.4.0\r\n\n");
         length = os_strlen(httphead);
     }
-
     if (psend) {
-        //espconn_sent(ptrespconn, (uint8 *)pbuf, length/2);
-        //espconn_sent(ptrespconn, (uint8 *)pbuf+(length/2), length - (length/2));
-        for(i=0;i<10;i++) {
-            espconn_sent(ptrespconn, (uint8 *)pbuf+(i*(length/10)), length/10);
-        }
+         espconn_sent(ptrespconn, (uint8 *)pbuf, length);
     } else {
         espconn_sent(ptrespconn, (uint8 *)httphead, length);
     }
