@@ -1,6 +1,9 @@
 <h2><strong>AppInventor Android App MQTT Example</strong></h2>
 
 This project is an Android Application developed using App Inventor.
+
+App Inventor is accessible online at: http://ai2.appinventor.mit.edu/
+
 This example is provided as method to interface with an MQTT broker.
 
 How it works:
