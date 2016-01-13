@@ -1,7 +1,7 @@
 <h2><strong>AppInventor Android App MQTT Example</strong></h2>
 
 This project is an Android Application developed using App Inventor.
-This example is provided as method of interface with an MQTT broker.
+This example is provided as method to interface with an MQTT broker.
 
 How it works:
 
@@ -10,9 +10,9 @@ the WebViewString. WebViewString is visible to both App Inventor and JavaScript.
 
 The MQTT parameters are hard-coded into the html file mqtt_appinventor.html.
 
-var mqtturl = "ws://test.mosquitto.org:8080/mqtt";
-var txtopic = "MyMqttSvrRqst";
-var rxtopic = "MyMqttSvrRply";
+var mqtturl = "ws://test.mosquitto.org:8080/mqtt";<br>
+var txtopic = "MyMqttSvrRqst";<br>
+var rxtopic = "MyMqttSvrRply";<br>
 
 These values will work only with the project presented here. They will need to be 
 modified as necessary to meet your own system requirements
@@ -21,7 +21,7 @@ modified as necessary to meet your own system requirements
 
 1. Connect your Android device to a PC via USB.
 2. From the PC, copy the file mqtt_appinventor.html to your Android SD card at the following location:
-   <ANDROID NAME ON PC>\Card\mqtt\mqtt_appinventor.html
+   <<ANDROID NAME ON PC>>\Card\mqtt\mqtt_appinventor.html
 3. Install the application "AppInventor_MQTT.apk" on the Android device.
 
 NOTE: If you want to build your own Android Application using the App Inventor web interface,
