@@ -30,8 +30,8 @@ modified as necessary to meet your own system requirements
 NOTE: If you want to build your own Android Application using the App Inventor web interface,
 import the project file AppInventor_MQTT.aia.
 
-This App assumes an ESP8266 device is running with the sketch found at 
+This App assumes an ESP8266 device is running the sketch found at: 
 
 https://github.com/internetofhomethings/Configurable-Web-Server
 
-installed.
+For more information, check out the post at http://wp.me/p5NRQ8-lf.
