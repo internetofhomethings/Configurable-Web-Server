@@ -27,7 +27,7 @@ modified as necessary to meet your own system requirements
    (ANDROID NAME ON PC)\Card\mqtt\mqtt_appinventor.html<br><br>
    You can also use an Android File Manager App to make sure the file is in the proper location.
    I used the App ES File Explorer. With that App, the file should be placed at:<br><br>
-   /storage/extSdCard/mqtt/mqtt_appinventor.html<br>
+   /storage/extSdCard/mqtt/mqtt_appinventor.html<br><br>
    The folder "mqtt" will need to be created.
 3. Install the application "AppInventor_MQTT.apk" on the Android device.
 
