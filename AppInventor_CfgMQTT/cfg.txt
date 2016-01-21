@@ -1,0 +1,5 @@
+{
+"mqtt_broker":"ws://test.mosquitto.org:8080/mqtt",
+"mqtt_txtopic":"MyMqttSvrRqst",
+"mqtt_rxtopic":"MyMqttSvrRply"
+}
