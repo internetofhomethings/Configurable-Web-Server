@@ -11,9 +11,9 @@ the WebViewString. WebViewString is visible to both App Inventor and JavaScript.
 The MQTT parameters are now configurable using this App Inventor App. The initial
 default values are:
 
-broker:        "ws://test.mosquitto.org:8080/mqtt";
-request topic: "MyMqttSvrRqst";
-reply topic:   "MyMqttSvrRply";
+broker:        "ws://test.mosquitto.org:8080/mqtt";<br>
+request topic: "MyMqttSvrRqst";<br>
+reply topic:   "MyMqttSvrRply";<br>
 
 These values will work only with the project presented here. They will need to be 
 modified as necessary to meet your own system requirements
