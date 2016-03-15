@@ -24,13 +24,18 @@ const char PAGE_NetCfg[]  PROGMEM = R"=====(
 <tr><td align="right">Netmask:</td><td><input type="text" id="nm_0" name="nm_0" size="3">.<input type="text" id="nm_1" name="nm_1" size="3">.<input type="text" id="nm_2" name="nm_2" size="3">.<input type="text" id="nm_3" name="nm_3" size="3"></td></tr>
 <tr><td align="right">Gateway:</td><td><input type="text" id="gw_0" name="gw_0" size="3">.<input type="text" id="gw_1" name="gw_1" size="3">.<input type="text" id="gw_2" name="gw_2" size="3">.<input type="text" id="gw_3" name="gw_3" size="3"></td></tr>
 <tr><td align="right">AP Mode IP:</td><td><input type="text" id="ap_0" name="ap_0" size="3">.<input type="text" id="ap_1" name="ap_1" size="3">.<input type="text" id="ap_2" name="ap_2" size="3">.<input type="text" id="ap_3" name="ap_3" size="3"></td></tr>
+<tr><td align="right">FOTA Password:</td><td><input type="text" id="fota_pw" name="fota_pw" value=""></td></tr>
+<tr><td align="right">FOTA Port:</td><td><input type="text" id="fota_pt" name="fota_pt" value=""></td></tr>
 <tr><td></td></tr><tr><td></td></tr>
 <tr><td colspan="2" align="center"><strong>MQTT Settings</strong></td></tr>
-<tr><td align="right">MQTT Broker:</td><td><input type="text" id="mqtt_bk" name="mqtt_bk" value=""></td></tr>
-<tr><td align="right">MQTT User Name:</td><td><input type="text" id="mqtt_un" name="mqtt_un" value=""></td></tr>
-<tr><td align="right">MQTT Password:</td><td><input type="text" id="mqtt_pw" name="mqtt_pw" value=""></td></tr>
-<tr><td align="right">MQTT Rx Topic:</td><td><input type="text" id="mqtt_rt" name="mqtt_rt" value=""></td></tr>
-<tr><td align="right">MQTT Tx Topic:</td><td><input type="text" id="mqtt_tt" name="mqtt_tt" value=""></td></tr>
+<tr><td align="right">Broker:</td><td><input type="text" id="mqtt_bk" name="mqtt_bk" value=""></td></tr>
+<tr><td align="right">Port:</td><td><input type="text" id="mqtt_pt" name="mqtt_pt" value=""></td></tr>
+<tr><td align="right">ClientId:</td><td><input type="text" id="mqtt_ci" name="mqtt_ci" value=""></td></tr>
+<tr><td align="right">User Name:</td><td><input type="text" id="mqtt_un" name="mqtt_un" value=""></td></tr>
+<tr><td align="right">Password:</td><td><input type="text" id="mqtt_pw" name="mqtt_pw" value=""></td></tr>
+<tr><td align="right">Rx Topic:</td><td><input type="text" id="mqtt_rt" name="mqtt_rt" value=""></td></tr>
+<tr><td align="right">Tx Topic:</td><td><input type="text" id="mqtt_tt" name="mqtt_tt" value=""></td></tr>
+<tr><td align="right">PW Enable:</td><td><input type="checkbox" id="mqtt_pw_en" name="mqtt_pw_en"></td></tr>
 <tr><td></td></tr><tr><td></td></tr>
 <tr><td colspan="2" align="center"><strong>Serial Interface</strong></td></tr>
 <tr><td align="right">Baud:</td><td><input type="text" id="ser_baud" name="ser_baud" value=""></td></tr>
@@ -62,14 +67,19 @@ const char PAGE_NetCfg[]  PROGMEM = R"=====(
      $("#ap_1").val("set_ap1");
      $("#ap_2").val("set_ap2");
      $("#ap_3").val("set_ap3");
+     $("#fota_pw").val("set_fota_pw");
+     $("#fota_pt").val("set_fota_pt");
      $("#svrport").val("set_port");
      $("#mqtt_bk").val("set_bk");
+     $("#mqtt_pt").val("set_pt");
+     $("#mqtt_ci").val("set_ci");
      $("#mqtt_un").val("set_un");
      $("#mqtt_pw").val("set_pw");
      $("#mqtt_rt").val("set_rt");
      $("#mqtt_tt").val("set_tt");
      $("#ser_baud").val("set_baud");
      $("#ser_serv").attr("checked", set_serv);
+     $("#mqtt_pw_en").attr("checked", set_mqtt_pw_en);
      
      $("#reset").click(function() {
          $("#ssid").val("reset");
@@ -77,9 +87,30 @@ const char PAGE_NetCfg[]  PROGMEM = R"=====(
      });
 </script>
 </body>
-</html>  
+</html> 
 )=====";
 
+const char PAGE_NetCfg2[]  PROGMEM = R"=====(
+<!DOCTYPE html>
+<html>
+    <head>
+      <title>Configure ESP8266 Wifi</title>
+      <style>ADDSTYLE</style>
+    </head>
+<body>
+<hr>
+<form id="toesp" action="" method="get">
+<table border="0"  cellspacing="0" cellpadding="3" style="width:450px" >
+<tr id="headrow"><td colspan="2" align="center"><strong>Internet Connectivity</strong></td></tr>
+<tr><td></td></tr><tr><td></td></tr>
+<tr><td colspan="2" align="center"><strong>Network Settings</strong></td></tr>
+<tr><td align="right">SSID:</td><td><input type="text" id="ssid" name="ssid" value=""></td></tr>
+<tr><td>Will this fit.?</td></tr>
+</table>
+</form>
+</body>
+</html> 
+)=====";
 
 const char PAGE_WaitAndReload[] PROGMEM = R"=====(
 <meta http-equiv="refresh" content="3; URL=config">

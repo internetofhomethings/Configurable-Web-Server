@@ -11,6 +11,12 @@
 #include "sketch.h"
 #include <ESP8266WiFi.h>          //http server library
 #include <PubSubClient.h>         //MQTT server library
+
+#include <ESP8266mDNS.h>          //OTA libraries
+#include <WiFiUdp.h>
+#include <ArduinoOTA.h>
+#include <time.h>
+
 #include <UtilityFunctions.h>
 #include <stdint.h>
 #include <EEPROM.h>
@@ -18,18 +24,20 @@
 #include "PAGE_NetworkConfiguration.h"
 
 // Include API-Headers
-extern "C" {                      //SDK functions for Arduino IDE acces 
+extern "C" {                      //SDK functions for Arduino IDE access 
 #include "ets_sys.h"
 #include "os_type.h"
 #include "osapi.h"
 #include "mem_manager.h"
 #include "mem.h"
+#include "string.h"
 #include "user_interface.h"
 #include "cont.h"
 #include "espconn.h"
 #include "eagle_soc.h"
 #include <pgmspace.h>
-void * pvPortZalloc(int size);
+void * pvPortZalloc(int size,char *, int);
+//void * pvPortZalloc(int size);
 }
 
 /********************************************************
@@ -37,9 +45,9 @@ void * pvPortZalloc(int size);
  ********************************************************/
    
 //----Initial EEPROM Values------//
-char init_ssid[32] = "YOURWIFISSID";            
-char init_pass[32] = "YOURWIFIPASSWORD";     
-const char* init_ip0 = "192";                      //Your assigned ESP8266 static IP
+char init_ssid[32] = "yourwifissid";            
+char init_pass[32] = "yourwifopassword";     
+const char* init_ip0 = "192";
 const char* init_ip1 = "168";
 const char* init_ip2 = "0";
 const char* init_ip3 = "132";
@@ -47,7 +55,7 @@ const char* init_nm0 = "255";
 const char* init_nm1 = "255";
 const char* init_nm2 = "255";
 const char* init_nm3 = "0";
-const char* init_gw0 = "192";                      //Your assigned WIFI LAN router IP
+const char* init_gw0 = "192";
 const char* init_gw1 = "168";
 const char* init_gw2 = "0";
 const char* init_gw3 = "1";
@@ -55,21 +63,40 @@ const char* init_ap0 = "192";
 const char* init_ap1 = "168";
 const char* init_ap2 = "4";
 const char* init_ap3 = "1";
-const char* init_port = "9701";                    //Web Server port
-const char* init_bk = "test.mosquitto.org";        //Your MQTT broker
+const char* init_port = "8266";
+const char* init_fota_port = "18266";
+const char* init_fota_pass = "";
+const char* init_mqtt_port = "1883";
+const char* init_bk = "test.mosquitto.org";
+const char* init_ci = "mqtt_clientID";
 const char* init_un = "mqtt_username";
 const char* init_pw = "mqtt_password";
 const char* init_rt = "MyMqttSvrRqst";
 const char* init_tt = "MyMqttSvrRply";
-const char* init_bd = "1200";                      
+const char* init_bd = "1200";
 const char* init_sr = "true";
+const char* init_mqpwen = "false";
 String mqtt_svr = "";
+String mqtt_ci = "";
 String mqtt_un = "";
+String mqtt_pw = "";
 String mqtt_rt = "";
 String mqtt_tt = "";
 bool arduino_server =false;
+bool mqtt_pw_enable =false;
 int http_port;
+int mqtt_port;
 int serial_baud;
+
+int timezone = 0;
+int dst = 0;
+
+
+//SerialEvent
+String SerialInString;
+bool NewSerialLineRx=false;
+int active_svr_rqst=SVR_NONE;
+long start_wait=0;
 
 long lastMsg = 0;
 uint32_t state=0;
@@ -86,6 +113,7 @@ int wifi=99;
 //sdk web server
 char *precvbuffer;
 static uint32 dat_sumlength = 0;
+bool httpsend_ready = true;
 
 /********************************************************
  * Local Function Prototypes
@@ -105,9 +133,10 @@ void SdkWebServer_listen(void *arg);
 void SdkWebServer_recv(void *arg, char *pusrdata, unsigned short length);
 void SdkWebServer_discon(void *arg);
 void SdkWebServer_recon(void *arg, sint8 err);
-void SdkWebServer_senddata(void *arg, bool responseOK, char *psend);
+void SdkWebServer_senddata(void *arg, bool responseOK, char *psend, char *contenttype);
 bool SdkWebServer_savedata(char *precv, uint16 length);
 void SdkWebServer_parse_url_params(char *precv, URL_Param *purl_param);
+void SdkWebServer_sent_cb(void *arg);
 
 void util_printStatus(char * status, int s);
 void util_startWIFI(void);
@@ -132,6 +161,7 @@ void BlinkCallback(int *pArg);
 void wifi_event_cb(System_Event_t *evt);
 
 String ArduinoSendReceive(String req);
+void MonitorSerialLine();
 
 /********************************************************
  * Instantiate class objects
@@ -145,6 +175,63 @@ os_timer_t ResetEspTimer;         //Timer to reset Esp8266
 struct espconn *ptrespconn;
 
 /********************************************************
+ * Set MQTT Topic Using ESP8266 MAC
+ * 
+ * 
+ * 
+ ********************************************************/
+
+ void AddMAC(char * prefix, char * topic) {
+     uint8_t MAC_array[6];
+     WiFi.macAddress(MAC_array);
+     sprintf(topic,"%s", prefix);
+     for (int i = 0; i < sizeof(MAC_array); ++i){
+          sprintf(topic,"%s%02x",topic, MAC_array[i]);
+     }
+ }
+
+/********************************************************
+ *  URL Parameter Decoder
+ ********************************************************/
+ 
+int url_decode(char *encoded_str, char *decoded_str) {
+   
+    // While we're not at the end of the string (current character not NULL)
+    while (*encoded_str) {
+        // Check to see if the current character is a %
+        if (*encoded_str == '%') {
+    
+            // Grab the next two characters and move encoded_str forwards
+            encoded_str++;
+            char high = *encoded_str;
+            encoded_str++;
+            char low = *encoded_str;
+    
+            // Convert ASCII 0-9A-F to a value 0-15
+            if (high > 0x39) high -= 7;
+            high &= 0x0f;
+    
+            // Same again for the low byte:
+            if (low > 0x39) low -= 7;
+            low &= 0x0f;
+    
+            // Combine the two into a single byte and store in decoded_str:
+            *decoded_str = (high << 4) | low;
+        } else {
+            // All other characters copy verbatim
+            *decoded_str = *encoded_str;
+        }
+    
+        // Move both pointers to the next character:
+        encoded_str++;
+        decoded_str++;
+    }
+    // Terminate the new string with a NULL character to trim it off
+    *decoded_str = 0;
+}
+
+
+/********************************************************
  * Update EEPROM configuration
  * Function: SetEepromCfg(URL_Param *pURL_Param)
  * 
@@ -155,12 +242,31 @@ struct espconn *ptrespconn;
  ********************************************************/
 void SetEepromCfg(void *arg)
 {
-    int i,j,serserver=0;
+    int i,j,serserver=0,mqtt_pwen=0;
     struct URL_Param *pURL_Param = (URL_Param *)arg;
+    char szT[64];
     for(i=0;i<pURL_Param->nPar;i++)
     {
-        if(os_strcmp(pURL_Param->pParam[i], "ssid")==0) SetEepromAscii((void *)pURL_Param, i, EEPROM_WIFISSID);
-        if(os_strcmp(pURL_Param->pParam[i], "password")==0) SetEepromAscii((void *)pURL_Param, i, EEPROM_WIFIPASS);
+        if(os_strcmp(pURL_Param->pParam[i], "ssid")==0) {
+            url_decode((char *)pURL_Param->pParVal[i], (char *)szT );
+            os_strcpy(pURL_Param->pParVal[i],szT);
+            SetEepromAscii((void *)pURL_Param, i, EEPROM_WIFISSID);
+        }
+        if(os_strcmp(pURL_Param->pParam[i], "password")==0) {
+            url_decode((char *)pURL_Param->pParVal[i], (char *)szT );
+            os_strcpy(pURL_Param->pParVal[i],szT);
+            SetEepromAscii((void *)pURL_Param, i, EEPROM_WIFIPASS);
+        }
+        if(os_strcmp(pURL_Param->pParam[i], "fota_pw")==0) {
+            url_decode((char *)pURL_Param->pParVal[i], (char *)szT );
+            os_strcpy(pURL_Param->pParVal[i],szT);
+            SetEepromAscii((void *)pURL_Param, i, EEPROM_FOTA_PW);
+        }
+        if(os_strcmp(pURL_Param->pParam[i], "fota_pt")==0) {
+            EEPROM.write(EEPROM_FOTA_PT+1, (uint8_t) (atoi(pURL_Param->pParVal[i])&0xFF));
+            EEPROM.write(EEPROM_FOTA_PT, (uint8_t) ((atoi(pURL_Param->pParVal[i])>>8)&0xFF));
+        }
+
         if(os_strcmp(pURL_Param->pParam[i], "ip_0")==0) EEPROM.write(EEPROM_WIFI_IP0, (uint8_t) atoi(pURL_Param->pParVal[i])); 
         if(os_strcmp(pURL_Param->pParam[i], "ip_1")==0) EEPROM.write(EEPROM_WIFI_IP1, (uint8_t) atoi(pURL_Param->pParVal[i])); 
         if(os_strcmp(pURL_Param->pParam[i], "ip_2")==0) EEPROM.write(EEPROM_WIFI_IP2, (uint8_t) atoi(pURL_Param->pParVal[i])); 
@@ -178,10 +284,31 @@ void SetEepromCfg(void *arg)
         if(os_strcmp(pURL_Param->pParam[i], "ap_2")==0) EEPROM.write(EEPROM_WIFI_AP2, (uint8_t) atoi(pURL_Param->pParVal[i])); 
         if(os_strcmp(pURL_Param->pParam[i], "ap_3")==0) EEPROM.write(EEPROM_WIFI_AP3, (uint8_t) atoi(pURL_Param->pParVal[i]));
         if(os_strcmp(pURL_Param->pParam[i], "mqtt_bk")==0) SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_BK);
-        if(os_strcmp(pURL_Param->pParam[i], "mqtt_un")==0) SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_UN);
-        if(os_strcmp(pURL_Param->pParam[i], "mqtt_pw")==0) SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_PW);
-        if(os_strcmp(pURL_Param->pParam[i], "mqtt_rt")==0) SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_RT);
-        if(os_strcmp(pURL_Param->pParam[i], "mqtt_tt")==0) SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_TT);
+        if(os_strcmp(pURL_Param->pParam[i], "mqtt_ci")==0) {
+            url_decode((char *)pURL_Param->pParVal[i], (char *)szT );
+            os_strcpy(pURL_Param->pParVal[i],szT);
+            SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_CI);
+        }
+        if(os_strcmp(pURL_Param->pParam[i], "mqtt_un")==0) {
+            url_decode((char *)pURL_Param->pParVal[i], (char *)szT );
+            os_strcpy(pURL_Param->pParVal[i],szT);
+            SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_UN);
+        }
+        if(os_strcmp(pURL_Param->pParam[i], "mqtt_pw")==0) {
+            url_decode((char *)pURL_Param->pParVal[i], (char *)szT );
+            os_strcpy(pURL_Param->pParVal[i],szT);
+            SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_PW);
+        }
+        if(os_strcmp(pURL_Param->pParam[i], "mqtt_rt")==0) {
+            url_decode((char *)pURL_Param->pParVal[i], (char *)szT );
+            os_strcpy(pURL_Param->pParVal[i],szT);
+            SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_RT);
+        }
+        if(os_strcmp(pURL_Param->pParam[i], "mqtt_tt")==0) {
+            url_decode((char *)pURL_Param->pParVal[i], (char *)szT );
+            os_strcpy(pURL_Param->pParVal[i],szT);
+            SetEepromAscii((void *)pURL_Param, i, EEPROM_MQTT_TT);
+        }
         if(os_strcmp(pURL_Param->pParam[i], "ser_baud")==0) {
             EEPROM.write(EEPROM_SER_BAUD+2, (int) (atoi(pURL_Param->pParVal[i])&0xFF));
             EEPROM.write(EEPROM_SER_BAUD+1, (int) ((atoi(pURL_Param->pParVal[i])>>8)&0xFF));
@@ -191,7 +318,14 @@ void SetEepromCfg(void *arg)
             SetEepromVal((char *)"true",EEPROM_SER_SERV, EEPROM_CHR);
             serserver=1;
         }
-
+        if(os_strcmp(pURL_Param->pParam[i], "mqtt_pw_en")==0) {
+            SetEepromVal((char *)"true",EEPROM_MQTTPWEN, EEPROM_CHR);
+            mqtt_pwen=1;
+        }
+        if(os_strcmp(pURL_Param->pParam[i], "mqtt_pt")==0) {
+            EEPROM.write(EEPROM_MQTT_PT+1, (uint8_t) (atoi(pURL_Param->pParVal[i])&0xFF));
+            EEPROM.write(EEPROM_MQTT_PT, (uint8_t) ((atoi(pURL_Param->pParVal[i])>>8)&0xFF));
+        }
         if(os_strcmp(pURL_Param->pParam[i], "svrport")==0) {
             EEPROM.write(EEPROM_SVR_PORT+1, (uint8_t) (atoi(pURL_Param->pParVal[i])&0xFF));
             EEPROM.write(EEPROM_SVR_PORT, (uint8_t) ((atoi(pURL_Param->pParVal[i])>>8)&0xFF));
@@ -199,6 +333,9 @@ void SetEepromCfg(void *arg)
     }
     if(!serserver) { //Set Arduino Server via serial off if not in parameter list
         SetEepromVal((char *)"false",EEPROM_SER_SERV, EEPROM_CHR);  
+    }
+    if(!mqtt_pwen) { //Set MQTT Password Enable off if not in parameter list
+        SetEepromVal((char *)"false",EEPROM_MQTTPWEN, EEPROM_CHR);  
     }
     EEPROM.commit();
 }
@@ -219,11 +356,15 @@ void SetSysCfgFromEeprom(void) {
     GetEepromVal(&mqtt_svr, EEPROM_MQTT_BK, EEPROM_CHR); 
     GetEepromVal(&mqtt_rt, EEPROM_MQTT_RT, EEPROM_CHR); 
     GetEepromVal(&mqtt_tt, EEPROM_MQTT_TT, EEPROM_CHR); 
+    GetEepromVal(&mqtt_ci, EEPROM_MQTT_CI, EEPROM_CHR);
     GetEepromVal(&mqtt_un, EEPROM_MQTT_UN, EEPROM_CHR);
+    GetEepromVal(&mqtt_pw, EEPROM_MQTT_PW, EEPROM_CHR);
     // Initialize Network Parameters for this session 
     GetEepromVal(&Param, EEPROM_SVR_PORT, EEPROM_INT16);
-    http_port = atoi(Param.c_str());       
-    // Get Serial baud for this session
+    http_port = atoi(Param.c_str());
+    GetEepromVal(&Param, EEPROM_MQTT_PT, EEPROM_INT16);
+    mqtt_port = atoi(Param.c_str());
+     // Get Serial baud for this session
     Param="";
     GetEepromVal(&Param, EEPROM_SER_BAUD, EEPROM_INT24);
     serial_baud = atoi(Param.c_str());       
@@ -231,6 +372,8 @@ void SetSysCfgFromEeprom(void) {
     Param="";
     GetEepromVal(&Param, EEPROM_SER_SERV, EEPROM_CHR); 
     arduino_server = os_strcmp(Param.c_str(), "true")==0; 
+    GetEepromVal(&Param, EEPROM_MQTTPWEN, EEPROM_CHR); 
+    mqtt_pw_enable = os_strcmp(Param.c_str(), "true")==0; 
 }
 
 /********************************************************
@@ -242,6 +385,7 @@ void SetSysCfgFromEeprom(void) {
  * return       no return value
  ********************************************************/
 void InitEepromValues(void) {
+    char topic[20];
     SetEepromVal((char *)init_ssid,EEPROM_WIFISSID, EEPROM_CHR);
     SetEepromVal((char *)init_pass,EEPROM_WIFIPASS, EEPROM_CHR);
     SetEepromVal((char *)init_ip0,EEPROM_WIFI_IP0, EEPROM_INT);
@@ -261,13 +405,21 @@ void InitEepromValues(void) {
     SetEepromVal((char *)init_ap2,EEPROM_WIFI_AP2, EEPROM_INT);
     SetEepromVal((char *)init_ap3,EEPROM_WIFI_AP3, EEPROM_INT);
     SetEepromVal((char *)init_bk,EEPROM_MQTT_BK, EEPROM_CHR);
+    SetEepromVal((char *)init_ci,EEPROM_MQTT_CI, EEPROM_CHR);
     SetEepromVal((char *)init_un,EEPROM_MQTT_UN, EEPROM_CHR);
     SetEepromVal((char *)init_pw,EEPROM_MQTT_PW, EEPROM_CHR);
-    SetEepromVal((char *)init_rt,EEPROM_MQTT_RT, EEPROM_CHR);
-    SetEepromVal((char *)init_tt,EEPROM_MQTT_TT, EEPROM_CHR);
+    AddMAC("mqtt_rx_", topic);
+    SetEepromVal((char *)topic,EEPROM_MQTT_RT, EEPROM_CHR);
+    AddMAC("mqtt_tx_", topic);
+    SetEepromVal((char *)topic,EEPROM_MQTT_TT, EEPROM_CHR);
     SetEepromVal((char *)init_port,EEPROM_SVR_PORT, EEPROM_INT16);
     SetEepromVal((char *)init_bd,EEPROM_SER_BAUD, EEPROM_INT24);
     SetEepromVal((char *)init_sr,EEPROM_SER_SERV, EEPROM_CHR);
+    SetEepromVal((char *)init_mqpwen,EEPROM_MQTTPWEN, EEPROM_CHR);
+    SetEepromVal((char *)init_mqtt_port,EEPROM_MQTT_PT, EEPROM_INT16);
+    SetEepromVal((char *)init_fota_port,EEPROM_FOTA_PT, EEPROM_INT16);
+    SetEepromVal((char *)init_fota_pass,EEPROM_FOTA_PW, EEPROM_CHR);
+   
     EEPROM.commit();
 }
 
@@ -331,6 +483,8 @@ void GetEepromCfg(String *page)
     
     SetCfgPageWithEepromVal(page, "set_ssid", EEPROM_WIFISSID, EEPROM_CHR);
     SetCfgPageWithEepromVal(page, "set_pass", EEPROM_WIFIPASS, EEPROM_CHR);
+    SetCfgPageWithEepromVal(page, "set_fota_pw", EEPROM_FOTA_PW, EEPROM_CHR);
+    SetCfgPageWithEepromVal(page, "set_fota_pt", EEPROM_FOTA_PT, EEPROM_INT16);
     SetCfgPageWithEepromVal(page, "set_ip0", EEPROM_WIFI_IP0, EEPROM_INT);
     SetCfgPageWithEepromVal(page, "set_ip1", EEPROM_WIFI_IP1, EEPROM_INT);
     SetCfgPageWithEepromVal(page, "set_ip2", EEPROM_WIFI_IP2, EEPROM_INT);
@@ -348,13 +502,19 @@ void GetEepromCfg(String *page)
     SetCfgPageWithEepromVal(page, "set_ap2", EEPROM_WIFI_AP2, EEPROM_INT);
     SetCfgPageWithEepromVal(page, "set_ap3", EEPROM_WIFI_AP3, EEPROM_INT);
     SetCfgPageWithEepromVal(page, "set_bk", EEPROM_MQTT_BK, EEPROM_CHR);
+    SetCfgPageWithEepromVal(page, "set_ci", EEPROM_MQTT_CI, EEPROM_CHR);
     SetCfgPageWithEepromVal(page, "set_un", EEPROM_MQTT_UN, EEPROM_CHR);
     SetCfgPageWithEepromVal(page, "set_pw", EEPROM_MQTT_PW, EEPROM_CHR);
     SetCfgPageWithEepromVal(page, "set_rt", EEPROM_MQTT_RT, EEPROM_CHR);
     SetCfgPageWithEepromVal(page, "set_tt", EEPROM_MQTT_TT, EEPROM_CHR);
     SetCfgPageWithEepromVal(page, "set_port", EEPROM_SVR_PORT, EEPROM_INT16);
+    SetCfgPageWithEepromVal(page, "set_pt", EEPROM_MQTT_PT, EEPROM_INT16);
+    SetCfgPageWithEepromVal(page, "set_pt", EEPROM_MQTT_CI, EEPROM_CHR);
+    SetCfgPageWithEepromVal(page, "set_fota_pt", EEPROM_FOTA_PT, EEPROM_INT16);
+    SetCfgPageWithEepromVal(page, "set_fota_pw", EEPROM_FOTA_PW, EEPROM_CHR);
     SetCfgPageWithEepromVal(page, "set_baud", EEPROM_SER_BAUD, EEPROM_INT24);
     SetCfgPageWithEepromVal(page, "set_serv", EEPROM_SER_SERV, EEPROM_CHR);
+    SetCfgPageWithEepromVal(page, "set_mqtt_pw_en", EEPROM_MQTTPWEN, EEPROM_CHR);
 }
 
 /********************************************************
@@ -554,7 +714,7 @@ void SdkWebServer_Init(int port) {
     espconn_regist_connectcb(&esp_conn, SdkWebServer_listen);
     //Start Listening for connections
     espconn_accept(&esp_conn); 
-    Serial.print("Web Server initialized: Type = SDK API\n");
+    Serial.print("Web Server initialized: Type = SDK API\r\n");
 }
 
 /********************************************************
@@ -573,6 +733,12 @@ void SdkWebServer_listen(void *arg)
     espconn_regist_recvcb(pesp_conn, SdkWebServer_recv);
     espconn_regist_reconcb(pesp_conn, SdkWebServer_recon);
     espconn_regist_disconcb(pesp_conn, SdkWebServer_discon);
+    espconn_regist_sentcb(pesp_conn, SdkWebServer_sent_cb);
+}
+
+void SdkWebServer_sent_cb(void *arg) {
+    //Serial.println("html sent complete");
+    httpsend_ready = true;
 }
 
 /********************************************************
@@ -647,10 +813,10 @@ void Server_SendReply(int servertype, int replytype, String payld) {
         case SVR_HTTP_SDK:
             switch(replytype) {
                 case REPLY_JSON:
-                    SdkWebServer_senddata(ptrespconn, true, (char *)payld.c_str());
+                    SdkWebServer_senddata(ptrespconn, true, (char *)payld.c_str(),"application/json");
                     break;
                 case REPLY_TEXT:
-                    SdkWebServer_senddata_html(ptrespconn, true, (char *)payld.c_str());
+                    SdkWebServer_senddata(ptrespconn, true, (char *)payld.c_str(),"text/html");
                     break;
             }
             break;
@@ -671,12 +837,13 @@ void Server_SendReply(int servertype, int replytype, String payld) {
     URL_Param *pURL_Param = NULL;
     pURL_Param = (URL_Param *)os_zalloc(sizeof(URL_Param));
     SdkWebServer_parse_url_params(payload, pURL_Param);
-
+    
     switch (pURL_Param->Type) {
         case GET:
             // ----------------------------------------------------------------------------
             // Serving Requests
             // ----------------------------------------------------------------------------
+
             if(os_strcmp(pURL_Param->pParam[0], "request")==0) {
                 // GetSensors is 1 of 4 requests the server currently supports
                 if(os_strcmp(pURL_Param->pParVal[0], "GetSensors")==0) {
@@ -725,31 +892,42 @@ void Server_SendReply(int servertype, int replytype, String payld) {
             // Serving Web Pages
             // ----------------------------------------------------------------------------
             //
+            // ------------- Load Test Page -----------------------------------------------
+            //NOTE: From this, a 1927 byte limit for serving web-pages to external domains
+            //      No such limit exists for local network access
+            if(os_strcmp(pURL_Param->pParam[0], "test")==0) {
+                WebPage = reinterpret_cast<const __FlashStringHelper *>(PAGE_NetCfg2);
+                String css = reinterpret_cast<const __FlashStringHelper *>(PAGE_Style2_css);
+                WebPage.replace("ADDSTYLE",css); 
+                css = "";
+                SdkWebServer_senddata(ptrespconn, true, (char *) WebPage.c_str(),"text/html");
+             }
             // ------------- Load Config Page ---------------------------------------------
             if(os_strcmp(pURL_Param->pParam[0], "config")==0) {
                 GetEepromCfg(&WebPage);
-                SdkWebServer_senddata_html(ptrespconn, true, (char *) WebPage.c_str());
-            }
+                SdkWebServer_senddata(ptrespconn, true, (char *) WebPage.c_str(),"text/html");
+             }
             // -------------- Save config or Reset ESP8266 --------------------------------
             if(os_strcmp(pURL_Param->pParam[0], "ssid")==0) {
                 
                 if(os_strcmp(pURL_Param->pParVal[0], "reset")==0){
                     // ------------- Reset ESP8266 ----------------------------------------
                     WebPage = reinterpret_cast<const __FlashStringHelper *>(PAGE_WaitAndReset);
-                    SdkWebServer_senddata_html(ptrespconn, true, (char *) WebPage.c_str());
+                    SdkWebServer_senddata(ptrespconn, true, (char *) WebPage.c_str(),"text/html");
                     os_timer_arm(&ResetEspTimer, 3000, false); 
                 }
                 else {
                     // -------------- Save config to EEPROM and reload config page --------
                     SetEepromCfg((void *)pURL_Param);        
                     WebPage = reinterpret_cast<const __FlashStringHelper *>(PAGE_WaitAndReload); //reload config page
-                    SdkWebServer_senddata_html(ptrespconn, true, (char *) WebPage.c_str());
+                    SdkWebServer_senddata(ptrespconn, true, (char *) WebPage.c_str(),"text/html");
                 }
             }
             // ----------------------------------------------------------------------------
             // Serving Arduino via serial port
             // ----------------------------------------------------------------------------
             if(os_strcmp(pURL_Param->pParam[0], "arduino")==0) {
+                active_svr_rqst = servertype;
                 //-------------- Request = SetDigital ---------------------
                 if(os_strcmp(pURL_Param->pParVal[0], "SetDigital")==0){
                     if(os_strcmp(pURL_Param->pParam[1], "chan")==0) {
@@ -786,20 +964,31 @@ void Server_SendReply(int servertype, int replytype, String payld) {
                         ArduinoRequest = "Invalid Request";  
                     }
                 }
+                //-------------- Request = Send MQTT Msg -------------------
+                else if(os_strcmp(pURL_Param->pParVal[0], "SendMsg")==0){
+                    if(os_strcmp(pURL_Param->pParam[1], "msg")==0) {
+                        ArduinoRequest = "Arduino_SM";
+                        ArduinoRequest += pURL_Param->pParVal[1];
+                    }
+                    else {
+                        ArduinoRequest = "Invalid Request";  
+                    }
+                }
                 //-------------- Request is not recognized -----------------
                 else {
                     ArduinoRequest = "Invalid Request";  
                 }
-                //------------- Execute valid request & get reply string -------------------
+                //------------- Send "invalid request" as reply ------------
                 if(os_strcmp(ArduinoRequest.c_str(), "Invalid Request")==0) {
                     payld = ArduinoRequest;
+                    Server_SendReply(servertype, REPLY_TEXT, payld);
                 }
+                //------------- Execute valid request  ---------------------
                 else {
                     rparam.request = ARDUINO_REQUEST;
                     rparam.requestval = 0;
                     Server_ExecuteRequest(servertype, rparam, &payld, ArduinoRequest);
                 }
-                Server_SendReply(servertype, REPLY_TEXT, payld);
             }
             break;
 
@@ -852,79 +1041,33 @@ void SdkWebServer_recon(void *arg, sint8 err)
         pesp_conn->proto.tcp->remote_ip[3],pesp_conn->proto.tcp->remote_port, err);
 }
 
-/********************************************************
- * SDK API Web Server send data to connected client
- * Function: SdkWebServer_senddata(void *arg, 
- *                                 bool responseOK, 
- *                                 char *psend)
- * 
- * Parameter    Description
- * ---------    ---------------------------------------
- * *arg         pointer to espconn structure
- * responseOK   reply status
- * *psend       string to send
- * return       no return value
- ********************************************************/
-void SdkWebServer_senddata(void *arg, bool responseOK, char *psend)
+void SdkWebServer_senddata(void *arg, bool responseOK, char *psend, char* contenttype)
 {
     uint16 length = 0;
+    uint16 length_send = 0;
+    uint16 length_sent = 0;
     char *pbuf = NULL;
-    char httphead[256];
-    //struct espconn *ptrespconn = ( espconn *)arg;
-    os_memset(httphead, 0, 256);
-
-    if (responseOK) {
-        os_sprintf(httphead,
-                   "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nServer: lwIP/1.4.0\r\nAccess-Control-Allow-Origin: *\r\n",
-                   psend ? os_strlen(psend) : 0);
-
-        if (psend) {
-            os_sprintf(httphead + os_strlen(httphead),
-                       "Content-type: application/json\r\nExpires: Fri, 10 Apr 2015 14:00:00 GMT\r\nPragma: no-cache\r\n\r\n");
-            length = os_strlen(httphead) + os_strlen(psend);
-            pbuf = (char *)os_zalloc(length + 1);
-            os_memcpy(pbuf, httphead, os_strlen(httphead));
-            os_memcpy(pbuf + os_strlen(httphead), psend, os_strlen(psend));
-        } else {
-            os_sprintf(httphead + os_strlen(httphead), "\n");
-            length = os_strlen(httphead);
-        }
-    } else {
-        os_sprintf(httphead, "HTTP/1.0 400 BadRequest\r\n\
-Content-Length: 0\r\nServer: lwIP/1.4.0\r\n\n");
-        length = os_strlen(httphead);
-    }
-
-    if (psend) {
-        espconn_sent(ptrespconn, (uint8 *)pbuf, length);
-    } else {
-        espconn_sent(ptrespconn, (uint8 *)httphead, length);
-    }
-
-    if (pbuf) {
-        os_free(pbuf);
-        pbuf = NULL;
-    }
-}
-
-void SdkWebServer_senddata_html(void *arg, bool responseOK, char *psend)
-{
-    uint16 length = 0;
-    char *pbuf = NULL;
-    char httphead[256];
+    char httphead[512];
     struct espconn *ptrespconn = ( espconn *)arg;
-    os_memset(httphead, 0, 256);
+    os_memset(httphead, 0, 512);
+    String gmt,expire;
 
+    time_t now = time(nullptr);
+    gmt = ctime(&now);
+    now += 3600 * 24;  //Expires in 1 day
+    expire = ctime(&now);
+    gmt = gmt.substring(0,3) + "," + gmt.substring(7,10) + gmt.substring(3,7) + gmt.substring(19,24) + gmt.substring(10,19) + " GMT";
+    expire = expire.substring(0,3) + "," + expire.substring(7,10) + expire.substring(3,7) + expire.substring(19,24) + expire.substring(10,19) + " GMT";
+    
     if (responseOK) {
         os_sprintf(httphead,
-                   "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nServer: lwIP/1.4.0\r\nAccess-Control-Allow-Origin: *\r\n",
-                   //"HTTP/1.0 200 OK\r\nContent-Length: %d\r\nAccess-Control-Allow-Origin: *\r\n",
-                   psend ? os_strlen(psend) : 0);
+                   "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nServer: lwIP/1.4.0\r\nAccess-Control-Allow-Origin: *\r\nDate: %s\r\n",
+                   psend ? os_strlen(psend) : 0,gmt.c_str());
 
         if (psend) {
             os_sprintf(httphead + os_strlen(httphead),
-                       "Content-type: text/html\r\nExpires: Fri, 15 Apr 2016 14:00:00 GMT\r\nPragma: no-cache\r\n\r\n");
-                       //"Content-type: application/json\r\nExpires: Fri, 10 Apr 2015 14:00:00 GMT\r\nPragma: no-cache\r\n\r\n");
+                   "Content-type: %s\r\nExpires: %s\r\nPragma: no-cache\r\n\r\n",contenttype,expire.c_str());
+                   //"Content-type: text/html\r\nExpires: %s\r\nPragma: no-cache\r\n\r\n",contenttype,expire.c_str());
             length = os_strlen(httphead) + os_strlen(psend);
             pbuf = (char *)os_zalloc(length + 1);
             os_memcpy(pbuf, httphead, os_strlen(httphead));
@@ -939,9 +1082,13 @@ Content-Length: 0\r\nServer: lwIP/1.4.0\r\n\n");
         length = os_strlen(httphead);
     }
     if (psend) {
-         espconn_sent(ptrespconn, (uint8 *)pbuf, length);
+         espconn_send(ptrespconn, (uint8 *)pbuf, length);
     } else {
-        espconn_sent(ptrespconn, (uint8 *)httphead, length);
+        //httpsend_ready set in SdkWebServer_sent_cb() callback which is called when espconn_send() completes
+        if(httpsend_ready) {
+            httpsend_ready = false;
+            espconn_send(ptrespconn, (uint8 *)httphead, length);
+        }
     }
 
     if (pbuf) {
@@ -1173,7 +1320,7 @@ void util_startWIFI(void) {
         const IPAddress gw_eeprom(EEPROM.read(EEPROM_WIFI_GW0),EEPROM.read(EEPROM_WIFI_GW1),EEPROM.read(EEPROM_WIFI_GW2),EEPROM.read(EEPROM_WIFI_GW3)); 
         const IPAddress ap_eeprom(EEPROM.read(EEPROM_WIFI_AP0),EEPROM.read(EEPROM_WIFI_AP1),EEPROM.read(EEPROM_WIFI_AP2),EEPROM.read(EEPROM_WIFI_AP3));
         GetEepromVal(&EepromSsid, EEPROM_WIFISSID, EEPROM_CHR); 
-        GetEepromVal(&EepromPass, EEPROM_WIFIPASS, EEPROM_CHR); 
+        GetEepromVal(&EepromPass, EEPROM_WIFIPASS, EEPROM_CHR);        
         if(!arduino_server) {
             Serial.print("\nLocal ESP   IP:");
             delay(10);
@@ -1634,12 +1781,18 @@ void Server_ExecuteRequest(int servertype, RQST_Param rparam, String* reply, Str
  ********************************************************/
 void MqttServer_reconnect(void) {
     int fst=10;
+    bool connected = false;
     // Loop until we're reconnected (give up after 10 tries)
     while (!client.connected()&&(fst!=0)) {
         Serial.print("Attempting MQTT connection...");
         // Connect to MQTT Server
-        //if (client.connect("Test44MyMQTT")) {
-        if (client.connect(mqtt_un.c_str())) {
+        if(mqtt_pw_enable) {
+            connected = client.connect(mqtt_ci.c_str(),mqtt_un.c_str(),mqtt_pw.c_str()); 
+        }
+        else {
+            connected = client.connect(mqtt_ci.c_str()); 
+        }
+        if (connected) {
             // Successful connection message & subscribe
             Serial.println("connected");
             client.subscribe((char *)mqtt_rt.c_str());
@@ -1673,17 +1826,18 @@ void MqttServer_callback(char* topic, byte* payload, unsigned int length)
     char* pReply = NULL;
     RQST_Param rparam;
     pReply = (char *)os_zalloc(512);
+        // Extract payload
+    for (int i = 0; i < length; i++) {
+        payld = payld + String((char)payload[i]);
+    }
     //Msg rx message
     if(!arduino_server) {
         Serial.println(F("-------------------------------------"));
         Serial.print(F("MQTT Message Rx: topic["));
         Serial.print(topic);
-        Serial.print("] \n");
+        Serial.print("] \r\nPayload:");
+        Serial.println(payld);
         Serial.println(F("-------------------------------------"));
-    }
-    // Extract payload
-    for (int i = 0; i < length; i++) {
-        payld = payld + String((char)payload[i]);
     }
     // Ignore if not Server Request
     if(String(topic) != mqtt_rt) {
@@ -1728,7 +1882,7 @@ void MqttServer_Processor(void) {
 void MqttServer_Init(void) {
     if(wifi==1) {
         // Start Mqtt server & set callback 
-        client.setServer((char *)mqtt_svr.c_str(), 1883);
+        client.setServer((char *)mqtt_svr.c_str(), mqtt_port);
         client.setCallback(MqttServer_callback);
     }
 }
@@ -1746,17 +1900,114 @@ String ArduinoSendReceive(String req) {
     String fromArduino = "";
     Serial.println(req);
     long start = millis();
-    while((millis() - start)<500) {           // 5 second timeout for arduino reply
+    fromArduino = "";
+    return fromArduino;
+}
+
+void MonitorSerialLine() {
+    if(arduino_server) {
         while (Serial.available()) {
-            char inChar = (char)Serial.read(); // get the new byte
-            fromArduino += inChar;             // add it to receive string
-            if (inChar == '\n') {              // return string if end of line
-                return fromArduino;
+            // get the new byte:
+            char inChar = (char)Serial.read();
+            // add it to the inputString:
+            SerialInString += inChar;
+            // if the incoming character is a newline, set a flag
+            // so the following code can process it
+            if (inChar == '\n') {
+                NewSerialLineRx = true;
             }
         }
+        //Send Received String as MQTT Message
+        if(NewSerialLineRx) {
+            //If not server request, just forward Arduino Message to MQTT
+            if(active_svr_rqst == SVR_NONE) {
+                active_svr_rqst = SVR_MQTT;  
+            }
+            Server_SendReply(active_svr_rqst, REPLY_TEXT, SerialInString);
+            active_svr_rqst = SVR_NONE;
+            SerialInString="";
+            NewSerialLineRx=false;
+        }
+        //Check for timeout for Arduino Server requests
+         if(active_svr_rqst != SVR_NONE) {
+             if(start_wait==0) start_wait = millis();
+             if( (millis() - start_wait)  >5000 ) { //5 sec timeout
+                  SerialInString = "no arduino reply received";
+                  Server_SendReply(active_svr_rqst, REPLY_TEXT, SerialInString);
+                  //Reset Request Parameters
+                  active_svr_rqst = SVR_NONE;
+                  start_wait=0;
+                  SerialInString="";
+                  NewSerialLineRx=false;
+             }
+         }
     }
-    fromArduino = "no arduino reply received";
-    return fromArduino;
+}
+
+/********************************************************
+ * Initialize local Time 
+ * Function: init_LocalTime()
+ * 
+ * Parameter      Description
+ * ---------      ---------------------------------------
+ * return         none
+ ********************************************************/
+void init_GmtTime() {
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    Serial.print("\nWaiting for time");
+    while (!time(nullptr)) {
+        Serial.print(".");
+        delay(1000);
+    }
+    Serial.print("\r\nTime has been acquired from internet time service\r\nCurrent GMT: ");
+
+    time_t now = time(nullptr);
+    Serial.println(ctime(&now));
+}
+/********************************************************
+ * Initialize Over the Wifi Firmware Updates 
+ * Function: init_FOTA()
+ * 
+ * Parameter      Description
+ * ---------      ---------------------------------------
+ * return         none
+ ********************************************************/
+void init_FOTA() {
+    String buff;
+    int pt;
+
+    //Hostname defaults to esp8266-[ChipID] (no change to default, which is unique (ChipID = last 3 MAC HEX)
+    //ArduinoOTA.setHostname("myesp8266");
+    
+    //Set FOTA Network Port
+    GetEepromVal(&buff, EEPROM_MQTT_PT, EEPROM_INT16);
+    pt = atoi(buff.c_str());
+    ArduinoOTA.setPort(pt);
+     
+    //Set OTA authentication (password)
+    GetEepromVal(&buff, EEPROM_FOTA_PW, EEPROM_CHR);
+    ArduinoOTA.setPassword((char *)buff.c_str());
+    
+    ArduinoOTA.onStart([]() {
+        Serial.println("Start");
+    });
+    ArduinoOTA.onEnd([]() {
+        Serial.println("\nEnd");
+    });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+    ArduinoOTA.begin();
+    Serial.print("FOTA Initialized using IP address: ");
+    Serial.println(WiFi.localIP());
 }
 
 /********************************************************
@@ -1789,10 +2040,15 @@ void setup() {
     #if MQTT_SVR_ENABLE==1
     MqttServer_Init();                   // Start MQTT Server
     #endif
+
+    init_FOTA();                         // Start FOTA Service
+
+    init_GmtTime();                      // Get GMT Time     
   
     pinMode(LED_IND , OUTPUT);           // Set Indicator LED as output
-    digitalWrite(LED_IND, 0);            // Turn LED off
+    digitalWrite(LED_IND, 0);            // Turn LED off (Setup complete indicator)
 }
+
 
 /********************************************************
  * Sketch loop() function: Executes repeatedly
@@ -1805,11 +2061,15 @@ void setup() {
 void loop() {
 
     util_startWIFI();                    // Connect wifi if connection dropped
- 
+
     #if MQTT_SVR_ENABLE==1
     MqttServer_Processor();              // Service MQTT
     #endif
    
     ReadSensors(2500);                   // Read 1 sensor every 2.5 seconds or longer
+
+    MonitorSerialLine();                 // Service Arduino Messages
+
+    ArduinoOTA.handle();                 // Service FOTA Requests
 }
 

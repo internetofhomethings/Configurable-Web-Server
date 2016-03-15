@@ -71,4 +71,55 @@ color: #fff;
 			max-width: 16em !important; } 
 	}
 )=====";
+
+const char PAGE_Style2_css[] PROGMEM = R"=====(
+
+.btn:hover, .btn:focus {
+color: #7FDBFF;  
+border: 1px solid #7FDBFF;  
+  -webkit-transition: background-color 0.3s, color 0.3s, border 0.3s;  
+transition: background-color 0.3s, color 0.3s, border 0.3s; 
+}
+  .btn:active {  
+color: #0074D9;  
+border: 1px solid #0074D9;  
+    -webkit-transition: background-color 0.3s, color 0.3s, border 0.3s;  
+transition: background-color 0.3s, color 0.3s, border 0.3s; 
+  } 
+  .btn--s 
+  {  
+    font-size: 12px; 
+  }
+  .btn--m { 
+    font-size: 14px; 
+  }
+  .btn--l {  
+    font-size: 20px;  border-radius: 0.25em !important; 
+  } 
+  .btn--full, .btn--full:link {
+    border-radius: 0.25em; 
+display: block;  
+      margin-left: auto; 
+      margin-right: auto; 
+      text-align: center; 
+width: 100%; 
+  } 
+  .btn--blue:link, .btn--blue:visited {
+color: #fff;  
+    background-color: #0074D9; 
+  }
+  .btn--blue:hover, .btn--blue:focus {
+color: #fff !important;  
+    background-color: #0063aa;  
+    border-color: #0063aa; 
+  }
+  .btn--blue:active {
+color: #fff; 
+    background-color: #001F3F;  border-color: #001F3F; 
+  }
+  @media screen and (min-width: 32em) {
+    .btn--full {  
+      max-width: 16em !important; } 
+  }
+)=====";
  

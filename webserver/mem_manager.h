@@ -69,9 +69,9 @@ static void prvHeapInit( void ) ;//ICACHE_FLASH_ATTR;
 
 void vApplicationMallocFailedHook( void ) ;//ICACHE_FLASH_ATTR;
 
-void *pvPortMalloc( size_t xWantedSize ) ;//ICACHE_FLASH_ATTR;
+// ESP BSP 2.1.0 conflict in mem.h void *pvPortMalloc( size_t xWantedSize ) ;//ICACHE_FLASH_ATTR;
 
-void vPortFree( void *pv ) ;//ICACHE_FLASH_ATTR;
+// ESP BSP 2.1.0 conflict in mem.h void vPortFree( void *pv ) ;//ICACHE_FLASH_ATTR;
 
 size_t xPortGetFreeHeapSize( void ) ;//ICACHE_FLASH_ATTR;
 

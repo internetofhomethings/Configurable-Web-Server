@@ -15,6 +15,7 @@
 #define SVR_HTTP_LIB 1
 #define SVR_HTTP_SDK 2
 #define SVR_COAP 3
+#define SVR_NONE 10
 
 //Reply Type
 #define REPLY_JSON 0
@@ -37,10 +38,10 @@
 #define AMUXSEL2 13     // AMUX Selector 2
 #define LED_IND 16      // LED used for initial code testing (not included in final hardware design)
 
-#define URLSize 28
+#define URLSize 32
 #define DATASize 32
 
-#define EEPROM_INIT 1
+#define EEPROM_INIT 0
 #define EEPROM_WIFISSID 0x10
 #define EEPROM_WIFIPASS 0x30
 #define EEPROM_WIFI_IP0 0x40
@@ -67,6 +68,11 @@
 #define EEPROM_MQTT_TT  0xE0
 #define EEPROM_SER_BAUD 0x100
 #define EEPROM_SER_SERV 0x108
+#define EEPROM_MQTTPWEN 0x110
+#define EEPROM_MQTT_PT  0x118
+#define EEPROM_FOTA_PT  0x11A
+#define EEPROM_FOTA_PW  0x120
+#define EEPROM_MQTT_CI  0x140
 
 #define EEPROM_CHR 0
 #define EEPROM_INT 1
