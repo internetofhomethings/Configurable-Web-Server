@@ -30,8 +30,10 @@ modified as necessary to meet your own system requirements
 <strong><h3>Setup:</h3></strong>
 
 1. Connect your Android device to a PC via USB.
-2. From the PC, copy the file mqtt_appinventor.html to your Android SD card at the following location:<br><br>
-   <ANDROID NAME ON PC>\Phone\mqtt\mqtt_appinventor.html<br><br>
+2. From the PC, copy the following files to your Android SD card at the following location:<br><br>
+   <ANDROID NAME ON PC>\Phone\mqtt\mqtt_appinventor_paho.html<br>
+   <ANDROID NAME ON PC>\Phone\mqtt\mqttws31.js<br>
+   <ANDROID NAME ON PC>\Phone\mqtt\cfg.txt<br><br>
 3. Install the application "AppInventor_MQTT_CFG_rev1.apk" on the Android device.
 
 NOTE: If you want to build your own Android Application using the App Inventor web interface,
