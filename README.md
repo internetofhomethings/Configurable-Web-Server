@@ -1,10 +1,10 @@
-<h2><strong>ESP8266 http Web and MQTT Server Update 4/26/2017</strong></h2>
+<h2><strong><red>ESP8266 http Web and MQTT Server: Update 2017-04-26</red></strong></h2>
 
 In addition to the capabilities noted below, this project has been recently updated to support secure TLS connections to an MQTT broker. The revised sketch and supporting files are in the folder "http_mqtt_server_SSL". Setup is the same except the compiler directive "MQTT_SVR_ENABLE" is no longer used.
 
 This sketch was compiled using Arduino IDE 1.8.2.
 
-<h2><strong>ESP8266 http Web and MQTT Server</strong></h2>
+<h2><strong>ESP8266 http Web and MQTT Server: Original Release 2016-01-06</strong></h2>
 
 This project provides a Web Server Framework supporting http and MQTT requests.
 
