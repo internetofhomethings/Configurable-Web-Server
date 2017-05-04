@@ -1,0 +1,14 @@
+{
+"mqtt_broker":"broker.mqttdashboard.com",
+"mqtt_txtopic":"mqtt_request",
+"mqtt_rxtopic":"mqtt_reply",
+"mqtt_un":"mosquitto",
+"mqtt_pw":"mosquitto",
+"mqtt_port":"8000",
+"mqtt_clientId":"clientID",
+"mqtt_keepalive":"60",
+"mqtt_lastWillTopic":"lwt",
+"mqtt_lastWillMessage":"closing down....",
+"mqtt_lastWillQoS":"0",
+"mqtt_TLS_enable":"false"
+}

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+    <head>
+	    <title>MQTT JavaScript Client Example</title>
+	</head>
+	<body>
+	    <!-- HTML to display MQTT topic values ------------------------------------------------->
+		<div><strong>ESP8266 MQTT Server</strong></div><br>
+		<div id="payloadmqqt"></div>
+		<br><br>
+		Request:<br>
+        <input id="request" type="text" name="request">
+		<button id="sendrequestmqtt" name="sendrequestmqtt">Request via MQTT</button>
+		<br><br>
+        <input id="filedata" type="text" name="filedata">
+		<button id="readfile" name="readfile">Read File</button>
+        <br><br>
+
+		<!-- mosquitto MQTT -------------------------------------------------------------------->
+		<!-- <script  type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script> -->
+		<script  type="text/javascript" src="mqttws31.js"></script>
+
+		<!-- jQuery ---------------------------------------------------------------------------->
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+
+		<!-- Custom MQTT client for this example ----------------------------------------------->
+		<script>
+
+			///////////////////////////////////////////////////////////
+			// Javascript for MQTT Server Communication
+			///////////////////////////////////////////////////////////
+
+            // Set Default Request ------------------------------------------------------------->
+		    $("#request").val("/?request=GetSensors");
+
+			//Set Default MQTT Url ------------------------------------------------------------->
+			var mqtt_url = "";
+			var mqtt_port = 0;
+			var mqtt_clientId = "";
+			var mqtt_keepalive = 60;
+			var mqtt_lastwilltopic = "";
+			var mqtt_lastwillmessage = "";
+			var mqtt_lastwillqos = 0;
+			var txtopic = "";
+			var rxtopic = "";
+			var tls_enable = "false";
+			var conn_kill = "";
+			var hAppInvSvr;
+
+			var connectString  = '{ "timeout":30, "userName":"", "password":"", "onSuccess":"", "onFailure":"" }';
+			var connectOptions = JSON.parse(connectString);
+
+			connectOptions.timeout=30;
+			connectOptions.onSuccess=onConnect;
+			connectOptions.onFailure=onFail2Connect;
+
+            //executes once after window is loaded --------------------------------------------->
+			function windowloaded() {
+				//client.connect(connectOptions);     // Connect to MQTT broker
+				AppInventorServer();                  // Start polling WebViewString
+			}
+			window.onload = windowloaded;  // Launch windowloaded()
+
+            // 10 Hz WebViewString polling timer function -------------------------------------->
+			function AppInventorServer() {
+			    clearTimeout(hAppInvSvr);
+			    var request = window.AppInventor.getWebViewString(); // Get WebViewString
+			    //GET: Send MQTT message -------------------------------------------------------------
+			    //------------------------------------------------------------------------------------
+			    if(request.substring(0, 4)=="GET:") {                // Validate request
+			        window.AppInventor.setWebViewString("");         // Reset String (process once)
+			        $("#request").val(request.substring(4, request.length)); //set request html textbox
+			        SendMqttRequest();                               // Send Mqtt Request
+		        }
+			    //CFG: Update configurable files in android device file ------------------------------
+			    //------------------------------------------------------------------------------------
+			    if(request.substring(0, 4) == "CFG:") {              // Validate request
+			        window.AppInventor.setWebViewString("");         // Reset String (process once)
+
+					if(typeof(client) !== 'undefined') {             // Disconnect if connected
+						client.disconnect();
+					}
+
+			        var cfgpar                      = JSON.parse(request.substring(4, request.length));
+			        txtopic                         = cfgpar.mqtt_txtopic;
+			        rxtopic                         = cfgpar.mqtt_rxtopic;
+			        mqtt_url                        = cfgpar.mqtt_broker;
+			        mqtt_port                       = Number(cfgpar.mqtt_port);
+			        mqtt_clientId                   = cfgpar.mqtt_clientId;
+					mqtt_keepalive                  = cfgpar.mqtt_keepalive;
+					mqtt_lastwilltopic              = cfgpar.mqtt_lastWillTopic;
+					mqtt_lastwillmessage            = cfgpar.mqtt_lastWillMessage;
+					mqtt_lastwillqos                = cfgpar.mqtt_lastWillQoS;
+					tls_enable                      = cfgpar.mqtt_TLS_enable;
+
+					connectOptions.userName         = cfgpar.mqtt_un;
+					connectOptions.password         = cfgpar.mqtt_pw;
+					connectOptions.keepAliveInterval= Number(mqtt_keepalive);
+					connectOptions.useSSL          = cfgpar.mqtt_TLS_enable == "true";
+
+					// Create a Last-Will-and-Testament
+					var lwt                         = new Paho.MQTT.Message(mqtt_lastwillmessage);
+					lwt.destinationName             = mqtt_lastwilltopic;
+					lwt.qos                         = Number(mqtt_lastwillqos);
+					lwt.retained                    = false;
+					connectOptions.willMessage      = lwt;
+
+					client                          = new Paho.MQTT.Client(mqtt_url, mqtt_port, mqtt_clientId);
+					client.onConnectionLost         = onConnectionLost;
+					client.onMessageArrived         = onMessageArrived;
+					client.connect(connectOptions);              // Connect to MQTT broker
+		        }
+			    //CNX: Connect to MQTT broker --------------------------------------------------------
+			    //------------------------------------------------------------------------------------
+			    if(request.substring(0, 4)=="CNX:") {                // Validate request
+			        window.AppInventor.setWebViewString("");         // Reset String (process once)
+			        if(typeof(client) == 'undefined') {
+						// Create MQTT client instance -------------------------------------------------->
+						client                  = new Paho.MQTT.Client(mqtt_url, mqtt_port, mqtt_clientId);
+						// set callback handlers
+						client.onConnectionLost = onConnectionLost;
+						client.onMessageArrived = onMessageArrived;
+					}
+					client.connect(connectOptions);                  // Connect to MQTT broker
+		        }
+			    //KILLCNX: Diconnect from MQTT broker ------------------------------------------------
+			    //------------------------------------------------------------------------------------
+			    if(request.substring(0, 7)=="KILLCNX") {             // Validate request
+			        window.AppInventor.setWebViewString("");         // Reset String (process once)
+			        conn_kill = "Y";
+					client.disconnect();
+		        }
+			    hAppInvSvr = setTimeout(AppInventorServer, 100);   // run AppInventorServer() in 100 ms
+			}
+
+            function ReadFile() {
+                ReadFileData();
+            }
+
+            // Callback for "Read File" button click ------------------------------------>
+			$("#readfile").click(function() {
+			    ReadFileData();
+			});
+
+			// Callback executed upon MQTT broker connection ----------------------------------->
+			function onConnect() {
+				// Once a connection has been made, make a subscription and send a message.
+				//console.log("onConnect:We are connected!");
+				client.subscribe(rxtopic);
+				//AppInventorServer();                // Start polling WebViewString
+			}
+
+			// Called when the client fails to connect ----------------------------------------->
+			function onFail2Connect() {
+				//console.log("onFail2Connect:Connection failed...");
+			}
+
+
+			// Callback executed upon MQTT broker disconnection -------------------------------->
+			function onConnectionLost(responseObject) {
+				if (responseObject.errorCode !== 0) {
+					//console.log("onConnectionLost:"+responseObject.errorMessage);
+				}
+				client = null;
+				delete client;
+				if(conn_kill != "Y") {
+					client = new Paho.MQTT.Client(mqtt_url, mqtt_port, mqtt_clientId);
+					client.onConnectionLost = onConnectionLost;
+					client.onMessageArrived = onMessageArrived;
+					client.connect(connectOptions);
+				}
+				else {
+				    conn_kill = "";
+				}
+			}
+
+
+
+			// Callback executed upon receipt of MQTT message ---------------------------------->
+			function onMessageArrived(message) {
+				//console.log("onMessageArrived:"+message.payloadString);
+				if(message.destinationName==rxtopic) {
+				    setpayload(message.payloadString);
+				}
+			}
+
+            // Callback for "Request via MQTT" button click ------------------------------------>
+			$("#sendrequestmqtt").click(function() {
+			    SendMqttRequest();
+			});
+
+            // Publishes MQTT topic contained in html #request object -------------------------->
+            function SendMqttRequest() {
+				message = new Paho.MQTT.Message($("#request").val());
+				message.destinationName = txtopic;
+				client.send(message);
+                //client.publish(txtopic,$("#request").val(),0,0);
+            }
+
+            // Sets WebViewString and html payload text box to 'payld' ------------------------->
+			function setpayload(payld) {
+				window.AppInventor.setWebViewString(payld);
+				$("#payloadmqqt").html(payld);
+			}
+
+			///////////////////////////////////////////////////////////
+			// End of Javascript for MQTT Server Communication
+			///////////////////////////////////////////////////////////
+
+		</script>
+	</body>
+</html>
